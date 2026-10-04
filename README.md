@@ -19,6 +19,11 @@ All numbers come from deterministic n8n Code nodes. No AI model sets any allocat
 1. Install n8n (`docker run -it --rm -p 5678:5678 -v n8n_data:/home/node/.n8n docker.n8n.io/n8nio/n8n`) or use n8n Cloud.
 2. In n8n choose **Workflows → Import from File** and select `workflows/emergency-supply-fairness-engine.json`.
 3. Click **Execute workflow**. Open each node to see its output. A sample final output is in `docs/sample_output.json`.
+4. ## Screenshots
+![Workflow](docs/n8n-workflow.png)
+![Fairness Report](docs/fairness-report.png)
+![Dispatch](docs/dispatch.png)
+![Ledger update](docs/nextpatcher.png)
 
 To see fairness debt at work, copy the `new_debt` values from the last node into the ledger in the *Load Sample Data* node and run again.
 
