@@ -1,0 +1,24 @@
+{
+  "config": { "cycle": 2, "lambda": 0.5, "targetDays": 3, "debtDecay": 0.5, "rulesVersion": "v1.0" },
+  "wards": [
+    { "ward_id": "W1", "name": "Riverside",   "stock": 20, "daily_need": 40, "vulnerability": 5, "secondary_access": "no" },
+    { "ward_id": "W2", "name": "Market Area", "stock": 70, "daily_need": 30, "vulnerability": 2, "secondary_access": "yes" },
+    { "ward_id": "W3", "name": "Old Town",    "stock": 15, "daily_need": 35, "vulnerability": 4, "secondary_access": "no" },
+    { "ward_id": "W4", "name": "Hill View",   "stock": 30, "daily_need": 20, "vulnerability": 3, "secondary_access": "no" },
+    { "ward_id": "W5", "name": "Lakeside",    "stock": 10, "daily_need": 30, "vulnerability": 4, "secondary_access": "no" },
+    { "ward_id": "W6", "name": "East Colony", "stock": 25, "daily_need": 25, "vulnerability": 3, "secondary_access": "yes" }
+  ],
+  "warehouses": [ { "wh_id": "WH-A", "stock": 120 }, { "wh_id": "WH-B", "stock": 80 } ],
+  "roads": [
+    { "ward_id": "W1", "wh_id": "WH-A", "status": "open" },    { "ward_id": "W1", "wh_id": "WH-B", "status": "open" },
+    { "ward_id": "W2", "wh_id": "WH-A", "status": "open" },
+    { "ward_id": "W3", "wh_id": "WH-A", "status": "blocked" }, { "ward_id": "W3", "wh_id": "WH-B", "status": "slow" },
+    { "ward_id": "W4", "wh_id": "WH-A", "status": "open" },    { "ward_id": "W4", "wh_id": "WH-B", "status": "slow" },
+    { "ward_id": "W5", "wh_id": "WH-A", "status": "slow" },    { "ward_id": "W5", "wh_id": "WH-B", "status": "blocked" },
+    { "ward_id": "W6", "wh_id": "WH-A", "status": "blocked" }, { "ward_id": "W6", "wh_id": "WH-B", "status": "blocked" }
+  ],
+  "ledger": [
+    { "ward_id": "W1", "debt": 0.2 }, { "ward_id": "W2", "debt": 0 }, { "ward_id": "W3", "debt": 0.8 },
+    { "ward_id": "W4", "debt": 0 },   { "ward_id": "W5", "debt": 0.5 }, { "ward_id": "W6", "debt": 0 }
+  ]
+}

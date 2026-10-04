@@ -1,0 +1,114 @@
+{
+  "approvedPlan": "B",
+  "dispatch": [
+    {
+      "cycle": 2,
+      "ward_id": "W1",
+      "ward": "Riverside",
+      "from": "WH-A",
+      "units": 62,
+      "plan": "B"
+    },
+    {
+      "cycle": 2,
+      "ward_id": "W2",
+      "ward": "Market Area",
+      "from": "WH-A",
+      "units": 20,
+      "plan": "B"
+    },
+    {
+      "cycle": 2,
+      "ward_id": "W3",
+      "ward": "Old Town",
+      "from": "WH-B",
+      "units": 51,
+      "plan": "B"
+    },
+    {
+      "cycle": 2,
+      "ward_id": "W4",
+      "ward": "Hill View",
+      "from": "WH-A",
+      "units": 23,
+      "plan": "B"
+    },
+    {
+      "cycle": 2,
+      "ward_id": "W5",
+      "ward": "Lakeside",
+      "from": "WH-A",
+      "units": 42,
+      "plan": "B"
+    }
+  ],
+  "nextLedger": [
+    {
+      "ward_id": "W1",
+      "ward": "Riverside",
+      "allocated": 62,
+      "old_debt": 0.2,
+      "new_debt": 0.108
+    },
+    {
+      "ward_id": "W2",
+      "ward": "Market Area",
+      "allocated": 20,
+      "old_debt": 0,
+      "new_debt": 0
+    },
+    {
+      "ward_id": "W3",
+      "ward": "Old Town",
+      "allocated": 51,
+      "old_debt": 0.8,
+      "new_debt": 0.493
+    },
+    {
+      "ward_id": "W4",
+      "ward": "Hill View",
+      "allocated": 23,
+      "old_debt": 0,
+      "new_debt": 0
+    },
+    {
+      "ward_id": "W5",
+      "ward": "Lakeside",
+      "allocated": 42,
+      "old_debt": 0.5,
+      "new_debt": 0.41
+    },
+    {
+      "ward_id": "W6",
+      "ward": "East Colony",
+      "allocated": 0,
+      "old_debt": 0,
+      "new_debt": 1
+    }
+  ],
+  "audit": {
+    "cycle": 2,
+    "approvedPlan": "B",
+    "rulesVersion": "v1.0",
+    "lambda": 0.5,
+    "targetDays": 3,
+    "debtDecay": 0.5,
+    "timestamp": "2026-10-04T08:58:02.383Z"
+  },
+  "report": "FAIRNESS REPORT - Cycle 2 (supply 200 units, rules v1.0)\nTop priorities: Riverside (score 1.1, fairness debt 0.2); Old Town (score 0.832, fairness debt 0.8); Lakeside (score 0.634, fairness debt 0.5).\nRouting: Old Town served via WH-B (slow road); Lakeside served via WH-A (slow road).\nUnreachable this cycle: East Colony. Their fairness debt carries over to the next cycle.\nPlan A (need-based): unmet need 171, worst-covered ward 0%.\nPlan B (minimum-coverage): unmet need 172, worst-covered ward 53%.\nTrade-off: Plan A follows priority scores most closely; Plan B protects the worst-off wards first.\nRecommendation: Plan B. The officer makes the final decision.",
+  "metrics": {
+    "A": {
+      "totalUnmetNeed": 171,
+      "lowestCoveragePct": 0,
+      "wardsBelow50": [
+        "Market Area",
+        "Hill View"
+      ]
+    },
+    "B": {
+      "totalUnmetNeed": 172,
+      "lowestCoveragePct": 53,
+      "wardsBelow50": []
+    }
+  }
+}

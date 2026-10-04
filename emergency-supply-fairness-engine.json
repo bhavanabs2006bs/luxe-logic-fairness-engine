@@ -1,0 +1,135 @@
+{
+  "name": "Emergency Supply Fairness Engine",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Run Cycle (Manual Trigger)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 1: Load Sample Data (synthetic). In the full version this comes from Google Sheets.\nreturn [{ json: {\n  config: { cycle: 2, lambda: 0.5, targetDays: 3, debtDecay: 0.5, rulesVersion: \"v1.0\" },\n  wards: [\n    { ward_id: \"W1\", name: \"Riverside\",   stock: 20, daily_need: 40, vulnerability: 5, secondary_access: \"no\" },\n    { ward_id: \"W2\", name: \"Market Area\", stock: 70, daily_need: 30, vulnerability: 2, secondary_access: \"yes\" },\n    { ward_id: \"W3\", name: \"Old Town\",    stock: 15, daily_need: 35, vulnerability: 4, secondary_access: \"no\" },\n    { ward_id: \"W4\", name: \"Hill View\",   stock: 30, daily_need: 20, vulnerability: 3, secondary_access: \"no\" },\n    { ward_id: \"W5\", name: \"Lakeside\",    stock: 10, daily_need: 30, vulnerability: 4, secondary_access: \"no\" },\n    { ward_id: \"W6\", name: \"East Colony\", stock: 25, daily_need: 25, vulnerability: 3, secondary_access: \"yes\" }\n  ],\n  warehouses: [ { wh_id: \"WH-A\", stock: 120 }, { wh_id: \"WH-B\", stock: 80 } ],\n  roads: [\n    { ward_id: \"W1\", wh_id: \"WH-A\", status: \"open\" },    { ward_id: \"W1\", wh_id: \"WH-B\", status: \"open\" },\n    { ward_id: \"W2\", wh_id: \"WH-A\", status: \"open\" },\n    { ward_id: \"W3\", wh_id: \"WH-A\", status: \"blocked\" }, { ward_id: \"W3\", wh_id: \"WH-B\", status: \"slow\" },\n    { ward_id: \"W4\", wh_id: \"WH-A\", status: \"open\" },    { ward_id: \"W4\", wh_id: \"WH-B\", status: \"slow\" },\n    { ward_id: \"W5\", wh_id: \"WH-A\", status: \"slow\" },    { ward_id: \"W5\", wh_id: \"WH-B\", status: \"blocked\" },\n    { ward_id: \"W6\", wh_id: \"WH-A\", status: \"blocked\" }, { ward_id: \"W6\", wh_id: \"WH-B\", status: \"blocked\" }\n  ],\n  ledger: [\n    { ward_id: \"W1\", debt: 0.2 }, { ward_id: \"W2\", debt: 0 }, { ward_id: \"W3\", debt: 0.8 },\n    { ward_id: \"W4\", debt: 0 },   { ward_id: \"W5\", debt: 0.5 }, { ward_id: \"W6\", debt: 0 }\n  ]\n}}];\n"
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Load Sample Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 2: Score need + road access + fairness debt, then build Plan A and Plan B.\n// Deterministic JavaScript. No AI is used for any number.\nconst d = $input.first().json;\nconst { lambda, targetDays } = d.config;\nconst supply = d.warehouses.reduce((s, w) => s + Number(w.stock), 0);\nconst factor = { open: 1, slow: 0.6, blocked: 0 };\n\nconst rows = d.wards.map(w => {\n  const need = Math.max(0, Number(w.daily_need) * targetDays - Number(w.stock));\n  // best available route to any warehouse\n  const routes = d.roads.filter(r => r.ward_id === w.ward_id)\n    .map(r => ({ wh: r.wh_id, status: r.status, f: factor[r.status] ?? 0 }))\n    .sort((a, b) => b.f - a.f);\n  const best = routes[0] || { wh: null, status: \"blocked\", f: 0 };\n  const debt = Number((d.ledger.find(l => l.ward_id === w.ward_id) || {}).debt || 0);\n  return {\n    ward_id: w.ward_id, name: w.name, need, daily: Number(w.daily_need),\n    vulnerability: Number(w.vulnerability), roadFactor: best.f, route: best.f > 0 ? best.wh : null,\n    routeStatus: best.status, debt, secondary: w.secondary_access === \"yes\" ? 0.15 : 0\n  };\n});\n\nconst maxNeed = Math.max(...rows.map(r => r.need), 1);\nrows.forEach(r => {\n  const needScore = (r.need / maxNeed) * (r.vulnerability / 5);\n  r.priority = Number(Math.max(0, needScore * r.roadFactor + lambda * r.debt - r.secondary).toFixed(3));\n});\n\nconst reachable = rows.filter(r => r.roadFactor > 0);\n\n// proportional fill by priority, capped at each ward's need, leftovers redistributed\nfunction fill(items, pool, alloc) {\n  let left = pool;\n  for (let k = 0; k < 10 && left > 0; k++) {\n    const open = items.filter(r => alloc[r.ward_id] < r.need);\n    const sumP = open.reduce((s, r) => s + r.priority, 0);\n    if (!open.length || sumP === 0) break;\n    let given = 0;\n    open.forEach(r => {\n      const share = Math.floor(left * r.priority / sumP);\n      const g = Math.min(share, r.need - alloc[r.ward_id]);\n      alloc[r.ward_id] += g; given += g;\n    });\n    if (given === 0) break;\n    left -= given;\n  }\n  return left;\n}\n\n// Plan A: need-based (priority-proportional)\nconst allocA = {}; reachable.forEach(r => allocA[r.ward_id] = 0);\nfill(reachable, supply, allocA);\n\n// Plan B: minimum coverage first (one day of need), then the rest by priority\nconst allocB = {}; reachable.forEach(r => allocB[r.ward_id] = 0);\nlet poolB = supply;\n[...reachable].sort((a, b) => b.priority - a.priority).forEach(r => {\n  const m = Math.min(r.need, r.daily, poolB); allocB[r.ward_id] += m; poolB -= m;\n});\nfill(reachable, poolB, allocB);\n\nreturn [{ json: { ...d, supply, rows, planA: allocA, planB: allocB,\n  unreachable: rows.filter(r => r.roadFactor === 0).map(r => r.name) } }];\n"
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Score and Build Plans",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 3: Compare the two plans and write a plain-language Fairness Report (template-based).\n// Optional upgrade: replace the report text with an LLM node that only rewrites these numbers.\nconst d = $input.first().json;\nconst metrics = plan => {\n  let unmet = 0, lowest = 1, below50 = [];\n  d.rows.forEach(r => {\n    const a = plan[r.ward_id] || 0;\n    unmet += Math.max(0, r.need - a);\n    if (r.roadFactor > 0 && r.need > 0) {\n      const c = a / r.need; lowest = Math.min(lowest, c);\n      if (c < 0.5) below50.push(r.name);\n    }\n  });\n  return { totalUnmetNeed: unmet, lowestCoveragePct: Math.round(lowest * 100), wardsBelow50: below50 };\n};\nconst mA = metrics(d.planA), mB = metrics(d.planB);\nconst recommended = (mB.lowestCoveragePct - mA.lowestCoveragePct >= 5) ? \"B\" : \"A\";\nconst top = [...d.rows].sort((a, b) => b.priority - a.priority).slice(0, 3);\n\nconst lines = [];\nlines.push(`FAIRNESS REPORT - Cycle ${d.config.cycle} (supply ${d.supply} units, rules ${d.config.rulesVersion})`);\nlines.push(`Top priorities: ` + top.map(r => `${r.name} (score ${r.priority}${r.debt > 0 ? \", fairness debt \" + r.debt : \"\"})`).join(\"; \") + \".\");\nconst rerouted = d.rows.filter(r => r.route && r.routeStatus !== \"open\");\nif (rerouted.length) lines.push(`Routing: ` + rerouted.map(r => `${r.name} served via ${r.route} (${r.routeStatus} road)`).join(\"; \") + \".\");\nif (d.unreachable.length) lines.push(`Unreachable this cycle: ${d.unreachable.join(\", \")}. Their fairness debt carries over to the next cycle.`);\nlines.push(`Plan A (need-based): unmet need ${mA.totalUnmetNeed}, worst-covered ward ${mA.lowestCoveragePct}%.`);\nlines.push(`Plan B (minimum-coverage): unmet need ${mB.totalUnmetNeed}, worst-covered ward ${mB.lowestCoveragePct}%.`);\nlines.push(`Trade-off: Plan A follows priority scores most closely; Plan B protects the worst-off wards first.`);\nlines.push(`Recommendation: Plan ${recommended}. The officer makes the final decision.`);\n\nreturn [{ json: { ...d, metrics: { A: mA, B: mB }, recommended, report: lines.join(\"\\n\") } }];\n"
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Compare Plans and Write Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 4: Apply the approved plan, write the dispatch order, and update the Fairness Debt ledger.\n// approvedPlan defaults to the recommendation. In the full version it comes from the Telegram approval.\nconst d = $input.first().json;\nconst approvedPlan = d.approvedPlan || d.recommended;\nconst plan = approvedPlan === \"A\" ? d.planA : d.planB;\nconst sumNeedReach = d.rows.filter(r => r.roadFactor > 0).reduce((s, r) => s + r.need, 0) || 1;\n\nconst dispatch = d.rows.filter(r => r.route).map(r => ({\n  cycle: d.config.cycle, ward_id: r.ward_id, ward: r.name, from: r.route,\n  units: plan[r.ward_id] || 0, plan: approvedPlan\n}));\n\nconst nextLedger = d.rows.map(r => {\n  const alloc = plan[r.ward_id] || 0;\n  const fair = Math.min(r.need, d.supply * r.need / sumNeedReach);\n  const shortfall = r.roadFactor === 0 ? 1 : (fair > 0 ? Math.max(0, (fair - alloc) / fair) : 0);\n  const newDebt = Number((d.config.debtDecay * r.debt + shortfall).toFixed(3));\n  return { ward_id: r.ward_id, ward: r.name, allocated: alloc, old_debt: r.debt, new_debt: newDebt };\n});\n\nconst audit = { cycle: d.config.cycle, approvedPlan, rulesVersion: d.config.rulesVersion,\n  lambda: d.config.lambda, targetDays: d.config.targetDays, debtDecay: d.config.debtDecay,\n  timestamp: new Date().toISOString() };\n\nreturn [{ json: { approvedPlan, dispatch, nextLedger, audit, report: d.report, metrics: d.metrics } }];\n"
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Apply Approval and Update Ledger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Emergency Supply Fairness Engine (Luxe Logic)\n1. Load synthetic ward, warehouse, road and ledger data\n2. Score need, road access and fairness debt; build Plan A (need-based) and Plan B (minimum-coverage)\n3. Compare plans and write the Fairness Report\n4. Apply the approved plan and update the fairness-debt ledger\n\nAll numbers come from deterministic Code nodes. Telegram approval and LLM report writing are the next planned steps.",
+        "height": 260,
+        "width": 620
+      },
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        20
+      ]
+    }
+  ],
+  "connections": {
+    "Run Cycle (Manual Trigger)": {
+      "main": [
+        [
+          {
+            "node": "Load Sample Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Sample Data": {
+      "main": [
+        [
+          {
+            "node": "Score and Build Plans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score and Build Plans": {
+      "main": [
+        [
+          {
+            "node": "Compare Plans and Write Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Plans and Write Report": {
+      "main": [
+        [
+          {
+            "node": "Apply Approval and Update Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
